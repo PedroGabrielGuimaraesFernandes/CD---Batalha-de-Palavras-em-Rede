@@ -11,8 +11,6 @@
 
 #include "jogo.h"
 
-/* Letras comuns em português — evita Q, K, W, X, Y, Z, que dificultam
- * demais encontrar palavras válidas de 5+ letras. */
 char gerar_letra_aleatoria(void) {
     static const char letras[] = "ABCDEFGHIJLMNOPRSTUV";
     int n = (int)(sizeof(letras) - 1);
@@ -82,7 +80,6 @@ int receber_linha(int fd, char *buffer, size_t tam) {
             return -1;
         }
         if (r == 0) {
-            /* conexão fechada pelo par */
             if (pos == 0) return 0;
             break;
         }
@@ -110,7 +107,7 @@ int receber_com_timeout(int fd, char *buffer, size_t tam, int segundos) {
         return -1;
     }
     if (ret == 0) {
-        return 0; /* timeout */
+        return 0;
     }
     return receber_linha(fd, buffer, tam);
 }
