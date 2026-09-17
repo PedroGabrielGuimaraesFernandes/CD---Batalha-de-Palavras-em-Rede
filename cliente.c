@@ -1,20 +1,3 @@
-/*
- * cliente.c — Batalha de Palavras em Rede
- *
- * Baseado no chat_cliente.c do professor: um select() só, olhando ao
- * mesmo tempo pro teclado (STDIN_FILENO) e pro socket do servidor.
- * Sem isso, eu teria que escolher entre ler o teclado ou ler o
- * socket — com select() dá pra fazer as duas coisas no mesmo laço.
- *
- * A diferença pro chat é que aqui o teclado só importa em dois
- * momentos (dizer o nome, digitar a palavra da rodada), e durante uma
- * rodada o select() precisa de um timeout — é isso que implementa o
- * limite de 10 segundos pra responder.
- *
- * Compilar: gcc -Wall -Wextra -pedantic -std=c11 -o cliente cliente.c jogo.c
- * Rodar:    ./cliente [ip] [porta]
- */
-
 #define _POSIX_C_SOURCE 200809L
 
 #include <stdio.h>
@@ -33,19 +16,12 @@
 #include "protocolo.h"
 #include "jogo.h"
 
-/* Guardo em que ponto da conversa com o servidor eu estou, porque
- * isso decide se o teclado entra ou não no select() e se preciso de
- * timeout. No chat, o teclado está sempre "ativo"; aqui não — só faz
- * sentido ler o teclado quando o servidor está esperando algo de
- * mim (nome ou palavra). */
 typedef enum {
     CLIENTE_AGUARDANDO_NOME,
     CLIENTE_OCIOSO,
     CLIENTE_RODADA_ATIVA
 } EstadoCliente;
 
-/* Trata uma linha "TIPO|dados" recebida do servidor. Devolve 1 se o
- * cliente deve encerrar (chegou FIM), 0 caso contrário. */
 static int tratar_linha_do_servidor(const char *linha, EstadoCliente *estado, time_t *prazo_rodada) {
     char tipo[TAM_TIPO], dados[TAM_BUFFER];
     parse_mensagem(linha, tipo, dados);
@@ -138,9 +114,6 @@ int main(int argc, char *argv[]) {
 
     printf("Conectado!\n\n");
 
-    /* Assim que conecto, o servidor já manda o NOME| — então começo
-     * "ocioso" e deixo o próprio tratamento de mensagem mudar o
-     * estado quando essa mensagem chegar. */
     EstadoCliente estado = CLIENTE_OCIOSO;
     time_t prazo_rodada = 0;
 
@@ -150,17 +123,11 @@ int main(int argc, char *argv[]) {
         FD_SET(fd, &read_fds);
         int max_fd = fd;
 
-        /* Só coloco o teclado no select() quando faz sentido ler
-         * dele. Fora desses dois momentos, digitar algo não teria
-         * pra onde ir mesmo. */
         if (estado == CLIENTE_AGUARDANDO_NOME || estado == CLIENTE_RODADA_ATIVA) {
             FD_SET(STDIN_FILENO, &read_fds);
             if (STDIN_FILENO > max_fd) max_fd = STDIN_FILENO;
         }
 
-        /* Só uso timeout durante uma rodada — é isso que implementa
-         * o limite de tempo pra digitar a palavra. Fora de rodada,
-         * bloqueio sem limite, igual ao chat_cliente.c original. */
         struct timeval tv;
         struct timeval *ptv = NULL;
         if (estado == CLIENTE_RODADA_ATIVA) {
@@ -178,9 +145,6 @@ int main(int argc, char *argv[]) {
             break;
         }
 
-        /* select() só retorna 0 quando demos um timeout — ou seja,
-         * só pode acontecer durante uma rodada: o tempo acabou e eu
-         * não digitei nada. */
         if (atividade == 0 && estado == CLIENTE_RODADA_ATIVA) {
             enviar_msg(fd, "%s|", MSG_TIMEOUT);
             printf("\n  ⏱ Tempo esgotado!\n");
@@ -188,7 +152,6 @@ int main(int argc, char *argv[]) {
             continue;
         }
 
-        /* -------- Chegou algo do SERVIDOR -------- */
         if (FD_ISSET(fd, &read_fds)) {
             char buffer[TAM_BUFFER * 2];
             ssize_t n = recv(fd, buffer, sizeof(buffer) - 1, 0);
@@ -199,7 +162,6 @@ int main(int argc, char *argv[]) {
             }
             buffer[n] = '\0';
 
-            /* Pode vir mais de uma mensagem grudada no mesmo recv() */
             int deve_sair = 0;
             char *salvar = NULL;
             char *linha = strtok_r(buffer, "\n", &salvar);
@@ -210,12 +172,11 @@ int main(int argc, char *argv[]) {
             if (deve_sair) break;
         }
 
-        /* -------- Chegou algo do TECLADO -------- */
         if (FD_ISSET(STDIN_FILENO, &read_fds)) {
             char input[TAM_PALAVRA];
 
             if (fgets(input, sizeof(input), stdin) == NULL) {
-                break; /* Ctrl+D */
+                break;
             }
             char *nl = strchr(input, '\n');
             if (nl) *nl = '\0';
