@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <strings.h>   /* strcasecmp — usada pra comparar palavras dos dois jogadores */
+#include <strings.h>
 #include <unistd.h>
 #include <signal.h>
 #include <errno.h>
@@ -26,24 +26,23 @@ typedef struct {
     int  porta;
     int  pontos;
 
-    int  em_partida;   /* 0 = ainda esperando adversário, 1 = jogando */
-    int  id_partida;   /* índice em 'partidas[]' — só vale se em_partida == 1 */
+    int  em_partida;
+    int  id_partida;
 
-    int  remover;     
+    int  remover;
 } Jogador;
 
 static Jogador clientes[MAX_CLIENTES];
 static int     num_clientes = 0;
 
 
-// Uma partida = uma dupla de jogadores jogando entre si.
 typedef struct {
     int    ativa;
-    int    idx_a, idx_b;     /* índices dos dois jogadores dentro de clientes[] */
+    int    idx_a, idx_b;
     int    numero_partida;
     int    rodada;
     char   letra;
-    time_t prazo;            /* momento em que a rodada atual vence */
+    time_t prazo;
 
     int  respondeu_a, respondeu_b;
     int  enviou_a, enviou_b;
@@ -86,23 +85,6 @@ static int adicionar_cliente(int fd, const char *nome, const char *ip, int porta
     return num_clientes - 1;
 }
 
-/*
- * Fecha o socket do cliente no índice 'i' e o tira da lista, colocando
- * o último cliente da lista no lugar dele (é o mesmo truque do "swap
- * com o último" que o chat_servidor.c usa em remover_cliente()).
- *
- * A parte que o chat NÃO precisa se preocupar, e que eu precisei
- * resolver, é a seguinte: como as partidas guardam o ÍNDICE dos dois
- * jogadores (idx_a e idx_b), se eu mover alguém de posição sem avisar
- * a partida dele, ela continua "acreditando" que o jogador está no
- * índice antigo — só que agora ali está outra pessoa. Descobri isso
- * testando com duas partidas rodando juntas: uma partida terminava,
- * eu removia os dois jogadores dela, e o placar da OUTRA partida
- * começava a sair errado.
- *
- * Por isso, depois do swap, eu confiro se quem foi movido está numa
- * partida em andamento e, se estiver, corrijo o índice guardado nela.
- */
 static void remover_cliente_no_indice(int i) {
     close(clientes[i].fd);
 
@@ -119,23 +101,6 @@ static void remover_cliente_no_indice(int i) {
     num_clientes--;
 }
 
-/*
- * Aqui é a parte chata que também tive que descobrir sozinho:
- * eu NÃO posso simplesmente chamar remover_cliente_no_indice() na
- * hora em que percebo que preciso remover alguém (por exemplo, dentro
- * do laço que trata mensagem por mensagem, lá no main). O motivo é
- * que esse laço percorre os clientes por índice, e se eu removo
- * alguém no meio do percurso (o que troca as posições no array), o
- * laço pode acabar processando de novo, sem querer, um cliente que já
- * tinha processado antes — e nesse reprocessamento eu chamaria
- * recv() num socket que já não tem mais nada pra ler, o que trava o
- * servidor esperando um dado que nunca chega.
- *
- * A solução mais simples que encontrei foi: em vez de remover na
- * hora, eu só "marco" o cliente com remover = 1, e só depois que o
- * laço principal termina de passar por todo mundo é que eu chamo essa
- * função aqui pra remover de verdade quem ficou marcado.
- */
 static void limpar_marcados_para_remover(void) {
     for (int i = num_clientes - 1; i >= 0; i--) {
         if (clientes[i].remover) {
@@ -144,10 +109,6 @@ static void limpar_marcados_para_remover(void) {
     }
 }
 
-/* ============================================================
- * Uma rodada nova: sorteia a letra, zera as respostas da dupla e
- * manda RODADA|num|letra|tempo pros dois.
- * ============================================================ */
 static void iniciar_rodada(Partida *p) {
     Jogador *ja = &clientes[p->idx_a];
     Jogador *jb = &clientes[p->idx_b];
@@ -166,11 +127,6 @@ static void iniciar_rodada(Partida *p) {
            p->numero_partida, p->rodada, p->letra);
 }
 
-/* Cria a struct Partida pra essa dupla e manda a primeira rodada.
- * Procuro primeiro por um "slot" livre de alguma partida que já
- * acabou, e só crio um novo se não achar nenhum — assim não preciso
- * de um array gigante, já que nem todas as partidas acontecem ao
- * mesmo tempo. */
 static void iniciar_partida(int idx_a, int idx_b) {
     int slot = -1;
     for (int i = 0; i < num_partidas; i++) {
@@ -178,8 +134,6 @@ static void iniciar_partida(int idx_a, int idx_b) {
     }
     if (slot == -1) {
         if (num_partidas >= (int)(sizeof(partidas) / sizeof(partidas[0]))) {
-            /* Não deveria acontecer — temos slots pra metade de
-             * MAX_CLIENTES — mas por segurança evito estourar o array. */
             enviar_msg(clientes[idx_a].fd, "%s|Servidor sem vagas para nova partida.", MSG_MSG);
             enviar_msg(clientes[idx_b].fd, "%s|Servidor sem vagas para nova partida.", MSG_MSG);
             return;
@@ -213,8 +167,6 @@ static void iniciar_partida(int idx_a, int idx_b) {
     iniciar_rodada(p);
 }
 
-/* Manda FIM personalizado pros dois (quem ganhou, quem perdeu, ou
- * empate) e marca os dois pra serem removidos da lista. */
 static void finalizar_partida(Partida *p) {
     Jogador *ja = &clientes[p->idx_a];
     Jogador *jb = &clientes[p->idx_b];
@@ -248,9 +200,6 @@ static void finalizar_partida(Partida *p) {
     p->ativa = 0;
 }
 
-/* Confere as duas palavras da rodada, dá ponto pra quem acertou,
- * manda RESULTADO e PLACAR, e decide se começa a próxima rodada ou
- * se a partida já acabou (5 rodadas). */
 static void finalizar_rodada(Partida *p) {
     Jogador *ja = &clientes[p->idx_a];
     Jogador *jb = &clientes[p->idx_b];
@@ -299,9 +248,6 @@ static void finalizar_rodada(Partida *p) {
     }
 }
 
-/* Guarda a resposta de um dos dois jogadores da partida. Quando os
- * dois já tiverem respondido, fecha a rodada na hora — não precisa
- * esperar o prazo vencer se os dois já mandaram alguma coisa. */
 static void registrar_resposta(Partida *p, int idx_jogador, const char *tipo, const char *dados) {
     int sou_a = (p->idx_a == idx_jogador);
 
@@ -309,7 +255,7 @@ static void registrar_resposta(Partida *p, int idx_jogador, const char *tipo, co
     int  *enviou    = sou_a ? &p->enviou_a    : &p->enviou_b;
     char *palavra   = sou_a ? p->palavra_a    : p->palavra_b;
 
-    if (*respondeu) return; /* já recebemos a resposta dessa rodada, ignora */
+    if (*respondeu) return;
 
     if (strcmp(tipo, MSG_PALAVRA) == 0 && dados[0] != '\0') {
         strncpy(palavra, dados, TAM_PALAVRA - 1);
@@ -326,14 +272,6 @@ static void registrar_resposta(Partida *p, int idx_jogador, const char *tipo, co
     }
 }
 
-/*
- * Chamada toda volta do laço principal pra ver se alguma rodada
- * estourou o prazo de 10 segundos sem os dois responderem. É por
- * causa dessa função que o select() precisa de um timeout (ver
- * calcular_timeout mais abaixo) — sem timeout, o select() ficaria
- * bloqueado esperando alguém mandar dado, e nunca ia "acordar"
- * sozinho pra aplicar o tempo esgotado em quem não respondeu.
- */
 static void verificar_prazos(void) {
     time_t agora = time(NULL);
 
@@ -349,14 +287,6 @@ static void verificar_prazos(void) {
     }
 }
 
-/*
- * O chat_servidor.c chama select() com timeout NULL, porque ele só
- * precisa acordar quando alguém manda mensagem. Aqui eu preciso de
- * outra coisa também: acordar sozinho quando o prazo de uma rodada
- * vence, mesmo que ninguém tenha mandado nada. Por isso calculo,
- * entre todas as partidas em andamento, qual é o prazo mais próximo,
- * e uso isso como timeout do select().
- */
 static struct timeval *calcular_timeout(struct timeval *tv) {
     time_t agora = time(NULL);
     time_t menor_prazo = -1;
@@ -369,7 +299,7 @@ static struct timeval *calcular_timeout(struct timeval *tv) {
     }
 
     if (menor_prazo == -1) {
-        return NULL; /* nenhuma partida rodando: pode bloquear sem limite */
+        return NULL;
     }
 
     time_t restante = menor_prazo - agora;
@@ -380,10 +310,6 @@ static struct timeval *calcular_timeout(struct timeval *tv) {
     return tv;
 }
 
-/*
- * Cliente 'i' caiu no meio de uma partida. Avisa o adversário que ele
- * ganhou por W.O. e marca os dois pra saírem da lista.
- */
 static void tratar_desconexao(int i) {
     Jogador *j = &clientes[i];
 
@@ -409,11 +335,6 @@ static void tratar_desconexao(int i) {
     j->remover = 1;
 }
 
-/*
- * Lê o que o cliente 'i' mandou. Só interessa duas coisas vindas dele
- * nesse ponto do jogo: PALAVRA|... ou TIMEOUT| (o nome já foi pego lá
- * no accept, então não preciso mais tratar NOME aqui).
- */
 static void tratar_mensagem_cliente(int i) {
     char buffer[TAM_BUFFER * 2];
     ssize_t n = recv(clientes[i].fd, buffer, sizeof(buffer) - 1, 0);
@@ -425,10 +346,6 @@ static void tratar_mensagem_cliente(int i) {
     }
     buffer[n] = '\0';
 
-    /* Um recv() pode trazer mais de uma linha grudada (o TCP não
-     * garante que cada send() do cliente vira um recv() separado
-     * aqui do lado do servidor), então separo por '\n' e processo uma
-     * linha de cada vez. */
     char *salvar = NULL;
     char *linha = strtok_r(buffer, "\n", &salvar);
     while (linha != NULL) {
@@ -444,19 +361,6 @@ static void tratar_mensagem_cliente(int i) {
     }
 }
 
-/*
- * Trata uma nova conexão. Aqui é onde eu segui bem de perto o trecho
- * que vi no chat_servidor.c: assim que aceito a conexão, peço o nome
- * e chamo recv() DIRETO, sem passar pelo select(). Isso quer dizer
- * que o servidor fica esperando bloqueado só nesse recv() até o
- * jogador digitar o nome — igual acontece no exemplo do chat.
- *
- * Sei que isso trava o servidor inteiro (inclusive outras partidas em
- * andamento) enquanto esse jogador não manda o nome. Pra esse
- * trabalho, com poucos jogadores testando ao mesmo tempo, na prática
- * não chega a ser um problema, porque o cliente manda o nome assim
- * que conecta. Mas é um ponto que eu sei que existe.
- */
 static void aceitar_conexao(int server_fd) {
     struct sockaddr_in cliente_addr;
     socklen_t tam = sizeof(cliente_addr);
@@ -472,8 +376,6 @@ static void aceitar_conexao(int server_fd) {
     int porta_cliente = ntohs(cliente_addr.sin_port);
     printf("[+] Nova conexão: %s:%d (fd=%d)\n", ip_str, porta_cliente, novo_fd);
 
-    /* Pede o nome (mensagem NOME| do protocolo) e espera a resposta
-     * de forma bloqueante, igual ao exemplo do chat. */
     enviar_msg(novo_fd, "%s|", MSG_NOME);
 
     char linha[TAM_BUFFER];
@@ -485,7 +387,6 @@ static void aceitar_conexao(int server_fd) {
     }
     linha[n] = '\0';
 
-    /* Tira o '\n' do final da linha, se tiver */
     char *quebra = strchr(linha, '\n');
     if (quebra) *quebra = '\0';
 
@@ -503,9 +404,6 @@ static void aceitar_conexao(int server_fd) {
 
     printf("[+] \"%s\" entrou (fd=%d)\n", clientes[idx].nome, novo_fd);
 
-    /* Procuro alguém que já esteja esperando adversário. Se achar,
-     * a partida já começa; se não achar, esse jogador vira quem
-     * espera a vez. */
     int adversario = -1;
     for (int i = 0; i < num_clientes; i++) {
         if (i != idx && !clientes[i].em_partida) {
@@ -567,9 +465,6 @@ int main(int argc, char *argv[]) {
         fd_set read_fds;
         int    max_fd;
 
-        /* Monto o fd_set de novo a cada volta, igual o chat faz —
-         * select() só deixa marcado quem realmente teve atividade, e
-         * a próxima chamada precisa começar do zero. */
         FD_ZERO(&read_fds);
         FD_SET(server_fd, &read_fds);
         max_fd = server_fd;
@@ -589,15 +484,10 @@ int main(int argc, char *argv[]) {
             break;
         }
 
-        /* Alguém tentando conectar */
         if (FD_ISSET(server_fd, &read_fds)) {
             aceitar_conexao(server_fd);
         }
 
-        /* Algum jogador já conectado mandou alguma coisa. Percorro de
-         * trás pra frente por hábito (é o que o chat faz), mas o
-         * importante mesmo é que ninguém é removido AQUI dentro — só
-         * mais tarde, em limpar_marcados_para_remover(). */
         for (int i = num_clientes - 1; i >= 0; i--) {
             if (FD_ISSET(clientes[i].fd, &read_fds)) {
                 tratar_mensagem_cliente(i);
@@ -605,9 +495,6 @@ int main(int argc, char *argv[]) {
         }
         limpar_marcados_para_remover();
 
-        /* Alguma rodada pode ter estourado o prazo mesmo sem ninguém
-         * mandar mensagem — é por isso que calculamos o timeout do
-         * select() lá em cima. */
         verificar_prazos();
         limpar_marcados_para_remover();
     }
