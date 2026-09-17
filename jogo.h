@@ -1,65 +1,39 @@
-
 #ifndef JOGO_H
 #define JOGO_H
 
-#include <stddef.h> // Necessário para o tipo size_t
+#include <stddef.h>
+#include "protocolo.h"
 
-#define BUFFER_SIZE 256
-#define PROTO_SEP "|"
-#define MIN_CARACTERES 5
+/* ---------- Lógica pura do jogo ---------- */
 
-/**
- * Envia uma mensagem formatada "tipo|conteudo\n" de forma segura.
- * Retorna 0 em caso de sucesso ou -1 em caso de erro.
- */
-int enviar_msg(int fd, const char *tipo, const char *conteudo);
-
-/**
- * Envia uma mensagem utilizando formatação estilo printf (variadic arguments).
- * Retorna 0 em caso de sucesso ou -1 em caso de erro.
- */
-int enviar_msgf(int fd, const char *tipo, const char *fmt, ...);
-
-/**
- * Lê de um socket caractere por caractere até encontrar um '\n' ou o limite do buffer.
- * Retorna o número de bytes lidos, 0 se a conexão fechou, ou -1 em caso de erro.
- */
-int receber_linha(int fd, char *buffer, size_t tamanho);
-
-/**
- * Aguarda por dados no socket até o tempo limite (timeout) usando select().
- * Retorna o número de bytes lidos, 0 se ocorreu timeout, ou -1 em caso de erro.
- */
-int receber_com_timeout(int fd, char *buffer, size_t tamanho, int timeout_seg);
-
-/**
- * Divide uma linha lida no formato "TIPO|CAMPO1|CAMPO2" em ponteiros separados.
- * Modifica a string original trocando '|' por '\0'.
- * Retorna a quantidade de campos encontrados após o tipo.
- */
-int parse_mensagem(char *linha, char **tipo, char *campos[], int max_campos);
-
-
-/* ============================================================
- * Lógica do jogo
- * ============================================================ */
-
-/**
- * Retorna uma letra aleatória válida para o jogo (exclui K, W, Y).
- */
+/* Sorteia uma letra (maiúscula) dentre um conjunto pré-definido */
 char gerar_letra_aleatoria(void);
 
-/**
- * Valida se a palavra começa com a letra informada, tem o tamanho mínimo
- * e contém apenas letras do alfabeto.
- * Retorna 1 se for válida ou 0 se for inválida.
- */
+/* Valida se 'palavra' começa com 'letra', tem tamanho mínimo e
+ * contém apenas letras (a-z, A-Z). Não verifica repetição —
+ * isso é feito pelo servidor, que conhece as duas respostas. */
 int validar_palavra(const char *palavra, char letra);
 
-/**
- * Compara duas palavras de forma case-insensitive.
- * Retorna 1 se forem iguais ou 0 se forem diferentes.
+/* ---------- Comunicação formatada pelo protocolo ---------- */
+
+/* Envia uma mensagem formatada (estilo printf) terminada em '\n'.
+ * Retorna 0 em sucesso, -1 em erro. */
+int enviar_msg(int fd, const char *fmt, ...);
+
+/* Lê uma linha (até '\n' ou até encher o buffer) de forma bloqueante.
+ * Retorna o número de bytes lidos, 0 se a conexão foi fechada
+ * pelo par, ou -1 em erro. */
+int receber_linha(int fd, char *buffer, size_t tam);
+
+/* Lê uma linha com timeout (segundos). Retorna:
+ *   > 0  -> bytes lidos
+ *   0    -> timeout (nada chegou a tempo) OU conexão fechada
+ *  -1    -> erro
  */
-int palavras_iguais(const char *a, const char *b);
+int receber_com_timeout(int fd, char *buffer, size_t tam, int segundos);
+
+/* Separa uma linha "TIPO|dados" em dois campos já alocados
+ * pelo chamador (tipo deve ter espaço >= TAM_TIPO, dados >= TAM_BUFFER). */
+void parse_mensagem(const char *linha, char *tipo, char *dados);
 
 #endif /* JOGO_H */

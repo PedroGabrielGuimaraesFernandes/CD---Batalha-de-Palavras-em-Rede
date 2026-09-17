@@ -1,18 +1,15 @@
-# ============================================================================
-# ARQUIVO: Makefile
-# OBJETIVO: Automatizar a compilação do projeto.
-# ============================================================================
-#
-# TODO LIST:
-# [ ] 1. Definir a variável CC (ex: gcc).
-# [ ] 2. Definir as CFLAGS (ex: -Wall -Wextra).
-# [ ] 3. Criar a regra "all" para compilar cliente e servidor.
-# [ ] 4. Criar a regra de compilação do "servidor".
-# [ ] 5. Criar a regra de compilação do "cliente".
-# [ ] 6. Criar a regra "clean" para remover os binários (rm -f servidor cliente).
-#
+CC = gcc
+CFLAGS = -Wall -Wextra -pedantic -std=c11
 
-CC=gcc
-CFLAGS=-Wall
+all: servidor cliente
 
-# Adicione as regras aqui...
+servidor: servidor.c jogo.c jogo.h protocolo.h
+	$(CC) $(CFLAGS) -o servidor servidor.c jogo.c
+
+cliente: cliente.c jogo.c jogo.h protocolo.h
+	$(CC) $(CFLAGS) -o cliente cliente.c jogo.c
+
+clean:
+	rm -f servidor cliente
+
+.PHONY: all clean

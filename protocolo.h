@@ -1,58 +1,33 @@
-/*
- * protocolo.h — Definições do protocolo de comunicação
- *
- * Este header é compartilhado entre cliente e servidor.
- * Define os tipos de mensagem e constantes do jogo.
- *
- * Protocolo de mensagens (texto separado por '|'):
- *
- *   Servidor → Cliente:
- *     MSG|texto                        → mensagem genérica para exibir
- *     NOME|                            → solicita o nome do jogador
- *     AGUARDE|texto                    → pede para esperar (ex: outro jogador)
- *     RODADA|num|letra|tempo           → início de rodada (número, letra, tempo em seg)
- *     RESULTADO|texto                  → resultado da rodada
- *     PLACAR|nome1|pts1|nome2|pts2     → placar atual
- *     FIM|texto                        → fim do jogo + resultado final
- *
- *   Cliente → Servidor:
- *     NOME|nome_do_jogador             → resposta com o nome
- *     PALAVRA|palavra_digitada         → resposta com a palavra da rodada
- *     TIMEOUT|                         → tempo esgotado (não enviou a tempo)
- */
-
 #ifndef PROTOCOLO_H
 #define PROTOCOLO_H
 
-/* ============================================================
- * Constantes do jogo
- * ============================================================ */
-#define PORTA_PADRAO    7070
-#define MAX_JOGADORES   2
-#define TOTAL_RODADAS   5
-#define TEMPO_LIMITE    10      /* segundos por rodada */
-#define MIN_CARACTERES  5       /* tamanho mínimo da palavra */
+/* ===================== Parâmetros do jogo ===================== */
+#define PORTA_PADRAO   7070
+#define NUM_RODADAS    5
+#define TEMPO_RODADA   10   /* segundos que cada jogador tem para responder */
+#define MIN_CARACTERES 5
+#define MAX_CLIENTES   20   /* conexões simultâneas suportadas pelo servidor */
 
-/* ============================================================
- * Constantes de rede
- * ============================================================ */
-#define BUFFER_SIZE     512
-#define NOME_SIZE       32
+/* ===================== Tamanhos de buffer ===================== */
+#define TAM_BUFFER  512
+#define TAM_NOME    64
+#define TAM_PALAVRA 128
+#define TAM_TIPO    32
 
-/* ============================================================
- * Prefixos das mensagens do protocolo
- * ============================================================ */
-#define PROTO_MSG       "MSG"
-#define PROTO_NOME      "NOME"
-#define PROTO_AGUARDE   "AGUARDE"
-#define PROTO_RODADA    "RODADA"
-#define PROTO_RESULTADO "RESULTADO"
-#define PROTO_PLACAR    "PLACAR"
-#define PROTO_FIM       "FIM"
-#define PROTO_PALAVRA   "PALAVRA"
-#define PROTO_TIMEOUT   "TIMEOUT"
+/* ===================== Separador do protocolo =================== */
+#define SEPARADOR '|'
 
-/* Separador de campos na mensagem */
-#define PROTO_SEP       "|"
+/* ============ Prefixos: Servidor -> Cliente ============ */
+#define MSG_MSG       "MSG"        /* MSG|texto                          */
+#define MSG_NOME      "NOME"       /* NOME|  (solicita nome)              */
+#define MSG_AGUARDE   "AGUARDE"    /* AGUARDE|texto                       */
+#define MSG_RODADA    "RODADA"     /* RODADA|num|letra|tempo              */
+#define MSG_RESULTADO "RESULTADO"  /* RESULTADO|texto                     */
+#define MSG_PLACAR    "PLACAR"     /* PLACAR|nome1|pts1|nome2|pts2        */
+#define MSG_FIM       "FIM"        /* FIM|texto                           */
+
+/* ============ Prefixos: Cliente -> Servidor ============ */
+#define MSG_PALAVRA   "PALAVRA"    /* PALAVRA|palavra_digitada            */
+#define MSG_TIMEOUT   "TIMEOUT"    /* TIMEOUT|  (não respondeu a tempo)   */
 
 #endif /* PROTOCOLO_H */
